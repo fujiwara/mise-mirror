@@ -5,17 +5,17 @@ jobs:
     strategy:
       matrix:
         go:
-          - "1.25"
           - "1.26"
+          - "1.27"
     name: Build
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: ${{ matrix.go }}
         id: go
@@ -23,3 +23,44 @@ jobs:
       - name: Build & Test
         run: |
           go test -race ./...
+
+  s3:
+    name: S3 integration test
+    runs-on: ubuntu-latest
+    env:
+      VERSITYGW_VERSION: "1.8.0"
+      VERSITYGW_SHA256: "2ba2c734d10d2c4e651d03182cb4b246656bc735a2f282db7b0b73fba6073467"
+      AWS_ACCESS_KEY_ID: testkey
+      AWS_SECRET_ACCESS_KEY: testsecret
+      AWS_REGION: us-east-1
+      AWS_ENDPOINT_URL_S3: http://localhost:7070
+      MISE_MIRROR_TEST_S3_BUCKET: mise-mirror-test
+
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.27"
+
+      - name: Start versitygw (posix backend)
+        run: |
+          name="versitygw_v${VERSITYGW_VERSION}_Linux_x86_64"
+          curl -sSfL -o /tmp/versitygw.tar.gz "https://github.com/versity/versitygw/releases/download/v${VERSITYGW_VERSION}/${name}.tar.gz"
+          echo "${VERSITYGW_SHA256}  /tmp/versitygw.tar.gz" | sha256sum -c -
+          tar xzf /tmp/versitygw.tar.gz -C /tmp
+          mkdir -p /tmp/versitygw-data
+          ROOT_ACCESS_KEY="${AWS_ACCESS_KEY_ID}" ROOT_SECRET_KEY="${AWS_SECRET_ACCESS_KEY}" \
+            nohup "/tmp/${name}/versitygw" --quiet --port 127.0.0.1:7070 posix /tmp/versitygw-data > /tmp/versitygw.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -s -o /dev/null "${AWS_ENDPOINT_URL_S3}" && exit 0
+            sleep 1
+          done
+          cat /tmp/versitygw.log
+          exit 1
+
+      - name: Test
+        run: |
+          go test -race -count=1 -run TestS3Integration -v ./...
