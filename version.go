@@ -1,3 +1,3 @@
 package mirror
 
-var Version = "v0.0.0"
+var Version = "v0.0.1"
