@@ -71,6 +71,14 @@ Mirror only specific platforms:
 $ mise-mirror --platform linux-x64 --platform linux-arm64 s3://my-bucket/mise-mirror/
 ```
 
+### GitHub token
+
+If `GITHUB_TOKEN` (or `GH_TOKEN`) is set, it is sent as the `Authorization` header to `github.com` and `api.github.com` to avoid rate limits for unauthenticated requests. The token is not sent to other hosts, including redirect destinations of GitHub release downloads.
+
+```console
+$ GITHUB_TOKEN=$(gh auth token) mise-mirror /path/to/dir
+```
+
 ### Layout of the mirror
 
 Each file is stored as `<destination>/<host>/<path>` of the `url` in the lock file.
