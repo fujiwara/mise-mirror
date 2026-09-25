@@ -1,6 +1,7 @@
 package mirror
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -14,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,6 +28,18 @@ type Mirror struct {
 	Concurrency int
 	Force       bool
 	DryRun      bool
+	// GitHubToken is sent only to GitHub hosts (see githubHosts).
+	GitHubToken string
+}
+
+// githubHosts are the hosts that GitHubToken is sent to.
+// Go's http.Client drops the Authorization header on redirects to other domains
+// (e.g. objects.githubusercontent.com), so the token is not leaked by redirects.
+var githubHosts = []string{"github.com", "api.github.com"}
+
+// GitHubTokenFromEnv returns a GitHub token from GITHUB_TOKEN or GH_TOKEN.
+func GitHubTokenFromEnv() string {
+	return cmp.Or(os.Getenv("GITHUB_TOKEN"), os.Getenv("GH_TOKEN"))
 }
 
 // ObjectKey returns the key in the mirror for rawURL. The key is "<host>/<path>",
@@ -149,6 +163,9 @@ func (m *Mirror) download(ctx context.Context, a Artifact, w io.Writer) error {
 		return err
 	}
 	req.Header.Set("User-Agent", "mise-mirror/"+Version)
+	if m.GitHubToken != "" && slices.Contains(githubHosts, strings.ToLower(req.URL.Hostname())) {
+		req.Header.Set("Authorization", "Bearer "+m.GitHubToken)
+	}
 	resp, err := m.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)

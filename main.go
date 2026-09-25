@@ -61,6 +61,7 @@ func run(ctx context.Context, c *CLI) error {
 		Concurrency: c.Concurrency,
 		Force:       c.Force,
 		DryRun:      c.DryRun,
+		GitHubToken: GitHubTokenFromEnv(),
 	}
 	if err := m.Run(ctx, artifacts); err != nil {
 		return err

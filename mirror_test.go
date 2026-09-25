@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -161,5 +163,72 @@ func TestMirrorErrors(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, host, "ok")); err != nil {
 		t.Errorf("ok must be mirrored: %v", err)
+	}
+}
+
+type recordTransport struct {
+	mu      sync.Mutex
+	headers map[string]string // URL -> Authorization header
+}
+
+func (t *recordTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	t.mu.Lock()
+	t.headers[req.URL.String()] = req.Header.Get("Authorization")
+	t.mu.Unlock()
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Body:       io.NopCloser(strings.NewReader("ok")),
+		Request:    req,
+	}, nil
+}
+
+func TestMirrorGitHubToken(t *testing.T) {
+	urls := []string{
+		"https://github.com/owner/repo/releases/download/v1.0.0/foo.tar.gz",
+		"https://api.github.com/repos/owner/repo/releases/assets/1",
+		"https://nodejs.org/dist/v22.11.0/node.tar.gz",
+		"https://github.com.example.com/foo",
+		"https://objects.githubusercontent.com/foo",
+	}
+	var artifacts []mirror.Artifact
+	for _, u := range urls {
+		artifacts = append(artifacts, mirror.Artifact{URL: u})
+	}
+	for _, token := range []string{"", "secret"} {
+		tr := &recordTransport{headers: map[string]string{}}
+		m := &mirror.Mirror{
+			Storage:     mirror.NewLocalStorage(t.TempDir()),
+			HTTPClient:  &http.Client{Transport: tr},
+			GitHubToken: token,
+		}
+		if err := m.Run(context.Background(), artifacts); err != nil {
+			t.Fatal(err)
+		}
+		for i, u := range urls {
+			want := ""
+			if token != "" && i < 2 {
+				want = "Bearer " + token
+			}
+			if got := tr.headers[u]; got != want {
+				t.Errorf("token=%q: Authorization for %s = %q, want %q", token, u, got, want)
+			}
+		}
+	}
+}
+
+func TestGitHubTokenFromEnv(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", "")
+	if got := mirror.GitHubTokenFromEnv(); got != "" {
+		t.Errorf("got %q", got)
+	}
+	t.Setenv("GH_TOKEN", "gh")
+	if got := mirror.GitHubTokenFromEnv(); got != "gh" {
+		t.Errorf("got %q, want gh", got)
+	}
+	t.Setenv("GITHUB_TOKEN", "github")
+	if got := mirror.GitHubTokenFromEnv(); got != "github" {
+		t.Errorf("got %q, want github", got)
 	}
 }
