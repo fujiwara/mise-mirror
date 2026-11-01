@@ -10,7 +10,7 @@ require (
 	github.com/aws/smithy-go v1.28.1
 	github.com/fujiwara/sloghandler v0.1.0
 	github.com/pelletier/go-toml/v2 v2.4.3
-	golang.org/x/sys v0.48.0
+	golang.org/x/sys v0.49.0
 )
 
 require (
