@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.47.1
 	github.com/aws/aws-sdk-go-v2/config v1.33.6
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.4
-	github.com/aws/smithy-go v1.28.1
+	github.com/aws/smithy-go v1.28.7
 	github.com/fujiwara/sloghandler v0.1.0
 	github.com/pelletier/go-toml/v2 v2.4.3
 	golang.org/x/sys v0.48.0
